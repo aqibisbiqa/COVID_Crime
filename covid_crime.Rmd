@@ -1,5 +1,5 @@
 ---
-title: "The Effect of the COVID-19 Pandemic on Crime in the United States"
+title: "Visualizing U.S. Crime and Law Enforcement in the 2010s"
 author: "Aqib Mahfuz"
 date: "4/27/2021"
 output: html_document
@@ -9,22 +9,288 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
+## Introduction
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+```{r echo=F, warning=F, message=F}
+# Loading libraries for project
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+library(tidyverse)
+library(ggplot2)
 
-```{r cars}
-summary(cars)
+library(rjson)  # for reading JSON files from API and more
+library(jsonlite)
+library(RJSONIO)
+
+library(usmap)  # for easily plotting map of United States
+library(ggpubr) # for putting multiple plots into one figure
 ```
 
-## Including Plots
+## Background
+Among the several divisive issues facing the United States in the early 2020s, the topic of law enforcement and policing has stood out in terms of the tension it has created within the American people. On one hand (Defund the police), and on the other (double down on law and order). To clarify, this experiment will not explicitly revolve around the issue of police brutality (statistics which are, regrettably, underreported). Rather, the goal is to analyze trends in crime and law enformcement between 2010 and 2019. Which types of crimes are the most prevalent and on the rise this past decade? 
+We aim to tackle three central questions:
+1. What effect does 
 
-You can also embed plots, for example:
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+
+## Hypotheses
+
+
+
+## Procedure
+
+```{r echo=F, warning=F, message=F}
+# Setting up API calls
+creds <- rjson::fromJSON(file = '../crime_data_api_credentials.json')
+API_KEY <- creds$api_key
+CDE_URL <- "https://api.usa.gov/crime/fbi/sapi"
+
+#paste(CDE_URL, API_KEY, sep="")
+
+temp <- jsonlite::fromJSON("https://api.usa.gov/crime/fbi/sapi/api/summarized/arson/national/2010/2019?API_KEY=iiHnOKfno2Mgkt5AynpvPpUQTEyxE77jo1RU8PIv")
+
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r echo=F, warning=F, message=F}
+# Collecting lookup data from API
+
+  # querying agency data (for ORI values to use in API calls)
+agencies_url <- "https://api.usa.gov/crime/fbi/sapi/api/agencies?"
+
+agencies <- jsonlite::fromJSON(paste(agencies_url, API_KEY, sep="API_KEY=")) %>% 
+  unlist(recursive = F) %>% 
+  do.call(what=rbind) %>% 
+  as.data.frame()
+
+fl_agencies <- filter(agencies, state_abbr=="FL")
+
+#length(unique(agencies$state_abbr))    we find that there are 54 states currently, will reduce to 51 by removing PR, VI, and GM
+
+agencies <- filter(agencies, 
+                   state_abbr!="PR" &
+                     state_abbr!="GM" &
+                     state_abbr!="VI")
+  
+
+## delete eventually
+victim_data_url_1 <- "https://api.usa.gov/crime/fbi/sapi/api/data/nibrs"
+victim_data_url_2 <- "victim/agencies"
+paste(paste(victim_data_url_1, "all-offenses", victim_data_url_2, "FL0500000", "race?", sep="/"), API_KEY, sep="API_KEY=")
+
+jsonlite::fromJSON(paste(paste(victim_data_url_1, "all-offenses", victim_data_url_2, "FL0500000", "race?", sep="/"), API_KEY, sep="API_KEY="))$results
+##
+
+rm(agencies_url)
+```
+
+```{r echo=F, warning=F, message=F}
+# Police Employment
+
+#The Police Employee dataset is made up of data collected annually about law enforcement officers and civilians employed by law enforcement agencies. The dataset contains information about the number of officers and civilians employed and the rate of police employees per a location’s population.
+
+#The Uniform Crime Reporting (UCR) Program defines law enforcement officers as individuals who ordinarily carry a firearm and a badge, have full arrest powers, and are paid from governmental funds set aside specifically for sworn law enforcement representatives.
+
+pe <- read.csv("pe_1960_2019.csv") %>% 
+  rename(state=state_postal_abbr)
+
+pe_recent <- pe %>%
+  drop_na(officer_rate_per_1000) %>% 
+  filter(data_year >= 2010 & data_year <= 2019) %>% 
+  filter(state != "PR")
+
+pe_min <- pe_recent %>% 
+  group_by(data_year) %>% 
+  slice_min(order_by=officer_rate_per_1000, n=5)
+
+pe_max <- pe_recent %>% 
+  group_by(data_year) %>% 
+  slice_max(order_by=officer_rate_per_1000, n=5)
+
+```
+
+```{r echo=F, warning=F, message=F}
+# Consider getting API level police employment data (get male and female officer data)
+```
+
+```{r echo=F, warning=F, message=F}
+# Import national level offense data (arson, rape, etc.)
+
+# Unfortunately, state and agency level offense data is troublesome to obtain. Moreover, the FBI discourages using lower level data to make comparisons between states/agencies. As such, we will only look at national level data.
+
+offense_url_1 <- "https://api.usa.gov/crime/fbi/sapi/api/nibrs"
+offense_url_2 <- "offender/national"
+
+offenses <- c("aggravated-assault", "burglary", "larceny", "motor-vehicle-theft", 
+              "homicide", "rape", "robbery", "arson", "violent-crime", "property-crime")
+cats <- c("count", "age", "race", "sex")
+
+offenses_df <- data.frame(offense = c(),
+                          stringsAsFactors=F)
+
+for (off in offenses){
+  temp <- data.frame(data_year = integer(),
+                     stringsAsFactors=F)
+  for (cat in cats){
+    offense_url <- paste(paste(offense_url_1, off, offense_url_2, cat, sep="/"), "?", "API_KEY=", API_KEY, sep="")
+    query_data <- jsonlite::fromJSON(offense_url)
+    
+    df <- query_data$data %>% 
+      subset(select=-c(month_num)) %>% 
+      group_by(data_year) %>%
+      mutate(k = key) %>%
+      spread(k, value) %>% 
+      mutate_if(is.numeric, funs(ifelse(is.na(.), 0, .))) %>% 
+      summarise_if(is.numeric, funs(sum))
+    
+    colnames(df) <- colnames(df) %>% 
+      lapply(tolower) %>% 
+      unlist()
+    if ("unknown" %in% colnames(df)){
+      colnames(df)[which(colnames(df) %in% "unknown")] <- paste("unknown_", cat, sep="")
+    }
+    
+    temp <- merge(temp, df, 
+                  by="data_year",
+                  all=T)
+  }
+  temp <- temp %>% 
+    mutate(offense = off)
+  offenses_df <- rbind(offenses_df, temp)
+}
+
+new_col_order <- colnames(offenses_df) %>% 
+  append("offense", after=1)
+new_col_order <- new_col_order[-length(new_col_order)]
+
+offenses_df <- offenses_df[,new_col_order] %>% 
+  filter(data_year >= 2010 & data_year <= 2019)
+
+rm(offense_url_1)
+rm(offense_url_2)
+rm(offense_url)
+rm(off)
+rm(cat)
+rm(query_data)
+rm(df)
+```
+
+```{r echo=F, warning=F, message=F}
+# Transform (i.e. merge, etc.) dataframes to get officer, civilians, type of offense, and year, with count of race, sex, age
+
+```
+
+```{r echo=F, warning=F, message=F}
+# Create linear models
+```
+
+```{r echo=F, warning=F, message=F}
+# Maps of Police Employment for each year
+pe10 <- plot_usmap(data=filter(pe_recent, data_year==2010),
+                   values="officer_rate_per_1000",
+                   color="black")+
+  scale_fill_continuous(low="white", high="steelblue4",
+                        name="Officers per 1000")+
+  theme(legend.position="none")
+
+pe11 <- plot_usmap(data=filter(pe_recent, data_year==2011),
+                   values="officer_rate_per_1000",
+                   color="black")+
+  scale_fill_continuous(low="white", high="steelblue4",
+                        name="Officers per 1000")+
+  theme(legend.position="none")
+
+pe12 <- plot_usmap(data=filter(pe_recent, data_year==2012),
+                   values="officer_rate_per_1000",
+                   color="black")+
+  scale_fill_continuous(low="white", high="steelblue4",
+                        name="Officers per 1000")+
+  theme(legend.position="none")
+
+pe13 <- plot_usmap(data=filter(pe_recent, data_year==2013),
+                   values="officer_rate_per_1000",
+                   color="black")+
+  scale_fill_continuous(low="white", high="steelblue4",
+                        name="Officers per 1000")+
+  theme(legend.position="none")
+
+pe14 <- plot_usmap(data=filter(pe_recent, data_year==2014),
+                   values="officer_rate_per_1000",
+                   color="black")+
+  scale_fill_continuous(low="white", high="steelblue4",
+                        name="Officers per 1000")+
+  theme(legend.position="none")
+
+pe15 <- plot_usmap(data=filter(pe_recent, data_year==2015),
+                   values="officer_rate_per_1000",
+                   color="black")+
+  scale_fill_continuous(low="white", high="steelblue4",
+                        name="Officers per 1000")+
+  theme(legend.position="none")
+
+pe16 <- plot_usmap(data=filter(pe_recent, data_year==2016),
+                   values="officer_rate_per_1000",
+                   color="black")+
+  scale_fill_continuous(low="white", high="steelblue4",
+                        name="Officers per 1000")+
+  theme(legend.position="none")
+
+pe17 <- plot_usmap(data=filter(pe_recent, data_year==2017),
+                   values="officer_rate_per_1000",
+                   color="black")+
+  scale_fill_continuous(low="white", high="steelblue4",
+                        name="Officers per 1000")+
+  theme(legend.position="none")
+
+pe18 <- plot_usmap(data=filter(pe_recent, data_year==2018),
+                   values="officer_rate_per_1000",
+                   color="black")+
+  scale_fill_continuous(low="white", high="steelblue4",
+                        name="Officers per 1000")+
+  theme(legend.position="none")
+
+pe19 <- plot_usmap(data=filter(pe_recent, data_year==2019),
+                   values="officer_rate_per_1000",
+                   color="black")+
+  scale_fill_continuous(low="white", high="steelblue4",
+                        name="Officers per 1000")+
+  theme(legend.position="none")
+```
+
+```{r echo=F, warning=F, message=F}
+# Plotting 
+ggarrange(pe10, pe11, pe12, pe13, pe14, pe15, pe16, pe17, pe18, pe19,
+          labels=c(2010:2019),
+          ncol=5, nrow=2)
+
+
+```
+
+
+
+
+
+
+Compare 5 highest and 5 lowest officer rate states over time.
+
+In these states, look at which types of crimes were committed the most.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
