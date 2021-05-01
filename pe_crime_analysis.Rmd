@@ -1,0 +1,1386 @@
+---
+title: "Analyzing the Converse Relationship of Police Employment and Crime Rates in the 2010s"
+author: 
+  - "Aqib Mahfuz"
+  - "amm198@duke.edu"
+date: "5/1/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=F, warning=F, message=F, fig.width=10)
+```
+
+```{r loading-libraries}
+# Loading libraries for project
+
+library(tidyverse)
+library(ggplot2)
+
+library(rjson)  # for reading JSON files from API and more
+library(jsonlite)
+library(RJSONIO)
+
+library(usmap)  # for easily plotting map of United States
+library(ggpubr) # for putting multiple plots into one figure
+```
+
+```{r setting-up-api}
+# Setting up API calls
+creds <- rjson::fromJSON(file = '../crime_data_api_credentials.json')
+API_KEY <- creds$api_key
+CDE_URL <- "https://api.usa.gov/crime/fbi/sapi"
+```
+
+---
+
+# Introduction
+
+Among the several issues facing the United States in the early 2020s, policing and criminal activity have stood out as topics that lead to the most tension and division within the American people. On one hand, campaigns such as “Defund the Police'' aim to reduce funding to policing institutions (Karma 2020), thereby reducing employment in the sector, while others claim that the nation needs more policing (Phelan 2020), counteracting rising counts of crime with “law and order”. Dispute between the two sides lit ablaze in response to the killing of George Floyd, although fiery debate has been common for at least the past decade. This study looks to analyze two converse relationships at the crux of either side’s argument: the effect of police employment on crime rates, and the effect of crime rate by different demographic groups on future police employment.
+
+### Background
+Many speculate about the effectiveness of traditional policing institutions on US crime. The common perception among Americans is that more cops equates to less crime. In fact, according to a Gallup survey conducted prior to the 2020 presidential election, upwards of 80% of US adults said they would like to see as much if not more police presence (Saad 2020), presumably in efforts to reduce crime in their areas. Moreover, the “epidemic of homicidal offenses” in urban areas in the 1980s and 1990s was counteracted with concentrated policing in certain hot spots and led to significant decreases in homicide rates. This strong evidence points to a logical conclusion: more policing reduces the likelihood a crime occurs, especially if the quality of policing isn’t questionably poor. However, the past decade is littered with incidents of police not doing their jobs and their actions resulting in protests, violence, and increased crime rates. Also, in his paper Evidence-Based Crime Prevention, Lawrence W. Sherman notes that “police only make minimal contributions to crime prevention in the context of far more powerful social institutions [like] the family and labor markets.” As a result, alternative methods of keeping the peace have been proposed, such as scaling back officer employment and upping civilian employment for a more community-based approach. To both these points, our experiment will try to analyze the effectiveness of policing.
+
+Also of interest in regards to the topic of law enforcement is how policing institutions react to changes in crime rates by different demographic groups. It’s no secret that the police have served as an “institution of racialized control throughout our nation’s history,” and this is reflected by increasing rates of police employment in marginalized communities (Sharkey 2020). Such trends reinforce institutionalized systemic racism, giving credit to movements like "Defund the Police". However, a lack of statistical significance in such trends would support opponents of those movements. Changes in employment are not immediate, but rather gradual; as an assumption for the remainder of this study, we take the lag for changes to take place to be one year. The flow of police into a state rarely spikes (see Figure 8 in the appendix) in the rare instances that it does, the cause is due to a large-scale event or protest, such as the 2011 Occupy Portland Movement resulting in a spike of Oregon’s employment rate that year. This study will try to model this gradual change based on the demographic makeup of the criminal base.
+
+As a final remark before diving into the study, it is worth emphasizing the importance of effective and just crime prevention solutions in the United States. Citizens should not be extremely worried about violence on a daily basis; this is fundamental to every well-functioning society. As notable criminal sociologist Patrick Sharkey puts it, "Nothing works if public space is unsafe." This study attempts to use data from the past decade to find trends that can help create solutions to reduce violence in America. As this nation inches closer to a tipping point, finding these solutions is not only an ideal, but a necessity.
+
+### Definition of Terms
+- *Officer*: refers to individuals who ordinarily carry a firearm and a badge, have full arrest powers, and are paid from governmental funds 
+- *Civilian*: refers to individuals employed by a policing institution without receiving formal training and may be working on a volunteer basis or other
+
+Note also that we will often use the terms "crime rate" and "offense rate" interchangeably.
+
+### Hypotheses
+**Hypothesis 1: Crimes committed by young, male, minority offenders is the most significant factor in increasing police employment the next year.**
+
+Of all the demographic groups, young and minority offenders are those that are most commonly given attention on news sources and social media. For this reason, we hypothesize that their crime rate will have the most significant relationship with police employment increasing in the next year.
+
+**Hypothesis 2: Increased officer, civilian, and total police employment will all lead to decreases in crime, but civilian employment rates will be the most significant**
+
+The prior evidence supports the idea that more policing reduces crime, but we'd like to test this with our own data. Moreover, a police force with more civilian support being the strongest factor in reducing crime would support the idea that a more community-based approach to violence prevention is the way to go moving forward. 
+
+---
+
+# Procedures and Results
+
+The git repository to this project can be found [here](https://github.com/aqibisbiqa/COVID_Crime).
+
+### Data Collection
+
+Our primary source of data is the FBI's Crime Data Explorer (CDE), and specifically data reported in the National Incident-Based Reporting System (NIBRS) format. 
+
+The CDE has an API from which one can query aggregated national-level data. We used this to acquire police employment rates from 2010 to 2019 of both officers and civilians. We also queried for national crime rates in the past decade; the API provides demographic information (race, age, and sex) for 10 key offenses ("aggravated-assault", "burglary", "larceny", "motor-vehicle-theft", "homicide", "rape", "robbery", "arson", "violent-crime", and "property-crime"). The JSON files returned by these queries were rather messy and required extensive cleaning. Exploratory visualizations are shown in the Appendix.
+
+For state-level crime rate data, we used .csv files that were downloaded for each individual state for each desired year. Within these files were lists of all the incidents, offenses, offenders, and victims (among more) that were recorded in the entire year. Using SQL-like merges and aggregation techniques, we transformed the incident-level data to tables in the same format as the national-level data, except with several more rows as we separate by state. For state-level police employment data, we also downloaded a .csv file from the CDE website that listed police employment data in the same format as the national-level data for all our desired states and years.
+
+Unfortunately, the FBI is conducting an overhaul of their database systems as of March 2021, requiring all states to now report incidents in the NIBRS format (as opposed to the archaic SRS system). This transition has led to limitations in which states we include in our study (as many lack NIBRS data throughout the decade). The list of states that we do include in our analysis are as follows: "AL", "AZ", "AR", "CO", "CT", "DE", "DC", "ID", "IL", "IA", "KS", "KY", "LA", "ME", "MA", "MI", "MO", "MT", "NE", "NH", "ND", "OH", "OK", "OR", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI".
+
+We also downloaded population data for each state and the nation from the US Census to use in normalizing police employment and crime rates.
+
+```{r national-police-employment-data}
+# Getting API level police employment data (get male and female officer data)
+pe_url <- paste("https://api.usa.gov/crime/fbi/sapi/api/police-employment/national/2010/2019?API_KEY=", API_KEY, sep="")
+
+pe <- jsonlite::fromJSON(pe_url)$results %>% 
+  subset(select=-c(agency_count_pe_submitting, csv_header)) %>% 
+  mutate(officer_ct = total_pe_ct-civilian_ct) %>% 
+  mutate(officer_ct_per_1000 = round(officer_ct*1000/population, digits=2)) %>% 
+  mutate(civilian_ct_per_1000 = round(civilian_ct*1000/population, digits=2)) %>% 
+  mutate(female_officer_prop = female_officer_ct/officer_ct) %>% 
+  mutate(female_civilian_prop = female_civilian_ct/civilian_ct) %>% 
+  mutate(female_total_prop = female_total_ct/total_pe_ct)
+
+rm(pe_url)
+```
+
+```{r state-police-employment-data}
+# Police Employment
+
+#The Police Employee dataset is made up of data collected annually about law enforcement officers and civilians employed by law enforcement agencies. The dataset contains information about the number of officers and civilians employed and the rate of police employees per a location’s population.
+
+#The Uniform Crime Reporting (UCR) Program defines law enforcement officers as individuals who ordinarily carry a firearm and a badge, have full arrest powers, and are paid from governmental funds set aside specifically for sworn law enforcement representatives.
+
+pe_states <- read.csv("pe_1960_2019.csv") %>% 
+  rename(state=state_postal_abbr)
+
+pe_recent <- pe_states %>%
+  drop_na(officer_rate_per_1000) %>% 
+  filter(data_year >= 2010 & data_year <= 2019) %>% 
+  filter(state != "PR") %>% 
+  mutate(total_rate_per_1000 = officer_rate_per_1000 + civilian_rate_per_1000)
+
+pe_states_min <- pe_recent %>% 
+  group_by(data_year) %>% 
+  slice_min(order_by=officer_rate_per_1000, n=5)
+
+pe_states_max <- pe_recent %>% 
+  group_by(data_year) %>% 
+  slice_max(order_by=officer_rate_per_1000, n=5)
+
+pe_states_spread <- pe_recent %>% 
+  mutate(total_rate_per_1000 = officer_rate_per_1000 + civilian_rate_per_1000) %>% 
+  group_by(state) %>% 
+  summarise(officer_to = sd(officer_rate_per_1000), 
+            civilian_to = sd(civilian_rate_per_1000), 
+            total_to = sd(total_rate_per_1000))
+
+rm(pe_states)
+```
+
+```{r state-population-data}
+full_pop <- read_csv("pop_estimates_2010_2019.csv") %>% 
+  select(`NAME`:`POPESTIMATE2019`) %>% 
+  filter(!(NAME %in% c("Northeast Region", "Midwest Region", "South Region", "West Region"))) %>% 
+  subset(select=-c(CENSUS2010POP,ESTIMATESBASE2010))
+colnames(full_pop) <- c("state", 2010:2019)
+
+abbrevs <- read_csv("state_abbreviations.csv") %>% 
+  rbind(data.frame(State="United States", Abbrev="USA", Code="USA")) %>% 
+  rename_with(tolower)
+
+pop <- merge(full_pop, abbrevs, by="state") %>% 
+  select(code, `2010`:`2019`) %>% 
+  rename(state = code) %>% 
+  gather(key="data_year", value="pop", `2010`:`2019`)
+
+rm(full_pop, abbrevs)
+```
+
+```{r national-crime-data}
+# Import national level offense data (arson, rape, etc.)
+
+# Unfortunately, state and agency level offense data is troublesome to obtain. Moreover, the FBI discourages using lower level data to make comparisons between states/agencies. As such, we will only look at national level data.
+
+offense_url_1 <- "https://api.usa.gov/crime/fbi/sapi/api/nibrs"
+offense_url_2 <- "offender/national"
+
+offenses <- c("aggravated-assault", "burglary", "larceny", "motor-vehicle-theft", 
+              "homicide", "rape", "robbery", "arson", "violent-crime", "property-crime")
+cats <- c("count", "age", "race", "sex")
+
+offenses_df <- data.frame(offense = c(),
+                          stringsAsFactors=F)
+
+for (off in offenses){
+  temp <- data.frame(data_year = integer(),
+                     stringsAsFactors=F)
+  for (cat in cats){
+    offense_url <- paste(paste(offense_url_1, off, offense_url_2, cat, sep="/"), "?", "API_KEY=", API_KEY, sep="")
+    query_data <- jsonlite::fromJSON(offense_url)
+    
+    df <- query_data$data %>% 
+      subset(select=-c(month_num)) %>% 
+      group_by(data_year) %>%
+      mutate(k = key) %>%
+      spread(k, value) %>% 
+      mutate_if(is.numeric, funs(ifelse(is.na(.), 0, .))) %>% 
+      summarise_if(is.numeric, funs(sum))
+    
+    colnames(df) <- colnames(df) %>% 
+      lapply(tolower) %>% 
+      unlist()
+    if ("unknown" %in% colnames(df)){
+      colnames(df)[which(colnames(df) %in% "unknown")] <- paste("unknown_", cat, sep="")
+    }
+    
+    temp <- merge(temp, df, 
+                  by="data_year",
+                  all=T)
+  }
+  temp <- temp %>% 
+    mutate(offense = off)
+  offenses_df <- rbind(offenses_df, temp)
+}
+
+new_col_order <- colnames(offenses_df) %>% 
+  append("offense", after=1)
+new_col_order <- new_col_order[-length(new_col_order)]
+
+offenses_df <- offenses_df[,new_col_order] %>% 
+  filter(data_year >= 2010 & data_year <= 2019) %>% 
+  merge(pop, by="data_year")
+
+rm(offense_url_1)
+rm(offense_url_2)
+rm(offense_url)
+rm(off)
+rm(cat)
+rm(query_data)
+rm(df)
+rm(new_col_order)
+```
+
+```{r state-crime-data-1}
+# Importing state level crime data
+
+states <- c("AL", "AZ", "AR", "CO", "CT", "DE",
+            "DC", "ID", "IL", "IA", "KS",
+            "KY", "LA", "ME", "MA", "MI", "MO",
+            "MT", "NE", "NH", "ND", "OH", "OK",
+            "OR", "RI", "SC", "SD", "TN",
+            "TX", "UT", "VT", "VA", "WA", "WV",
+            "WI")
+
+ref_race <- read.csv("state_crime_data/AL/AL-2010/ref_race.csv") %>% 
+  select(race_id, race_desc)
+
+# offense type lookups
+nibrs_offense_type <- read.csv("state_crime_data/AL/AL-2010/nibrs_offense_type.csv")
+names(nibrs_offense_type) <- tolower(names(nibrs_offense_type))
+nibrs_offense_type <- nibrs_offense_type %>% 
+  select(offense_type_id, offense_name, offense_category_name)
+
+state_crime = data.frame()
+
+# massive speed up if state_crime dataframe already created (set TRUE if you want to create, otherwise set FALSE)
+create_state_crime <- F
+
+if (create_state_crime){
+  for (state in states){
+    state_data = data.frame()
+  
+    for (year in c(2010:2019)){
+      # getting file location
+      loc <- paste("state_crime_data/", state, "/", state, "-", year, sep="")
+      if (year %in% 2016:2019){
+        loc <- paste(loc, "/", state, sep="")
+      }
+      
+      loc
+      
+      # offender data
+      nibrs_offender <- read.csv(paste(loc, "/", 
+                                       "nibrs_offender", ".csv", sep="")) 
+      names(nibrs_offender) <- tolower(names(nibrs_offender))
+      nibrs_offender <- nibrs_offender %>% 
+        select(incident_id, age_num, sex_code, race_id)
+      
+      # offense data
+      nibrs_offense <- read.csv(paste(loc, "/", 
+                                       "nibrs_offense", ".csv", sep=""))
+      names(nibrs_offense) <- tolower(names(nibrs_offense))
+      nibrs_offense <- nibrs_offense %>% 
+        select(incident_id, offense_type_id)
+      
+      # merging stuff
+      temp <- merge(nibrs_offender, nibrs_offense, by="incident_id")
+        # ages
+      ages <- temp %>% group_by(age_num, offense_type_id) %>% 
+        summarise(ct = n()) %>% 
+        drop_na() %>% 
+        mutate(age_group = 
+                 case_when(age_num >= 0 & age_num <= 9 ~ "0_9",
+                           age_num >= 10 & age_num <= 19 ~ "10_19",
+                           age_num >= 20 & age_num <= 29 ~ "20_29",
+                           age_num >= 30 & age_num <= 39 ~ "30_39",
+                           age_num >= 40 & age_num <= 49 ~ "40_49",
+                           age_num >= 50 & age_num <= 59 ~ "50_59",
+                           age_num >= 60 & age_num <= 69 ~ "60_69",
+                           age_num >= 70 & age_num <= 79 ~ "70_79",
+                           age_num >= 80 & age_num <= 89 ~ "80_89",
+                           TRUE ~ "90_older")
+               ) %>% 
+        subset(select=-c(age_num)) %>% 
+        group_by(age_group, offense_type_id) %>% 
+        summarise(age_ct = sum(ct))
+        # sexes
+      sexes <- temp %>% group_by(sex_code, offense_type_id) %>% 
+        summarise(sex_ct = n()) %>% 
+        drop_na() %>% 
+        filter(sex_code == "M" | sex_code == "F")
+        # races
+      races <- temp %>% group_by(race_id, offense_type_id) %>% 
+        summarise(race_ct = n()) %>% 
+        drop_na() %>% 
+        filter(race_id != 0)
+  
+      df <- merge(ages, 
+                  merge(sexes, races, by="offense_type_id", all=T),
+                  by="offense_type_id",
+                  all=T) %>% 
+        mutate_if(is.numeric, funs(ifelse(is.na(.), 0, .)))
+  
+      yearly_data <- cbind(data.frame(data_year = year,
+                                      state = state,
+                                      stringsAsFactors = F),
+                           df)
+      state_data <- rbind(yearly_data, state_data)
+    }
+    
+    state_crime <- rbind(state_crime, state_data)
+  }
+  write.csv(state_crime, "state_crime.csv")
+}
+
+
+if (!create_state_crime){
+  state_crime <- read.csv("state_crime.csv") %>% 
+    subset(select=-c(X))
+}
+
+sc <- state_crime %>% 
+  spread(age_group, age_ct) %>% 
+  subset(select=-c(18)) %>% 
+  spread(sex_code, sex_ct) %>% 
+  subset(select=-c(18)) %>% 
+  filter(race_id != 0) %>% 
+  merge(ref_race, by="race_id") %>% 
+  spread(race_desc, race_ct) %>% 
+  subset(select=-c(1, 21)) %>% 
+  merge(nibrs_offense_type, by="offense_type_id") %>% 
+  subset(select=-c(1, 22)) %>% 
+  mutate_if(is.numeric, funs(ifelse(is.na(.), 0, .)))
+
+if (T){
+  sc <- sc %>% 
+    mutate(cat=
+             case_when(offense_category_name %in% c("All Other Offenses",
+                                                    "Other Offenses",
+                                                    "Peeping Tom",
+                                                    "Animal Cruelty",
+                                                    "Curfew/Loitering/Vagrancy Violations",
+                                                    "Disorderly Conduct",
+                                                    "Weapon Law Violations"
+                                                    ) ~ "Other",
+                       offense_category_name %in% c("Arson"
+                                                    ) ~ "Arson",
+                       offense_category_name %in% c("Assault Offenses"
+                                                    ) ~ "Aggravated_Assault",
+                       offense_category_name %in% c("Bad Checks",
+                                                    "Bribery",
+                                                    "Counterfeiting/Forgery",
+                                                    "Embezzlement",
+                                                    "Extortion/Blackmail",
+                                                    "Fraud Offenses",
+                                                    "Gambling Offenses"
+                                                    ) ~ "Financial_Crime",
+                       offense_category_name %in% c("Burglary/Breaking & Entering"
+                                                    ) ~ "Burglary",
+                       offense_category_name %in% c("Destruction/Damage/Vandalism of Property",
+                                                    "Stolen Property Offenses",
+                                                    "Tresspass of Real Property"
+                                                    ) ~ "Property_Crime",
+                       offense_category_name %in% c("Drug/Narcotic Offenses",
+                                                    "Driving Under the Influence",
+                                                    "Drunkenness",
+                                                    "Liquor Law Violations"
+                                                    ) ~ "Narcotics/Alcohol",
+                       offense_category_name %in% c("Homicide Offenses"
+                                                    ) ~ "Homicide",
+                       offense_category_name %in% c("Human Trafficking",
+                                                    "Kidnapping/Abduction"
+                                                    ) ~ "Trafficking",
+                       offense_category_name %in% c("Larceny/Theft Offenses"
+                                                    ) ~ "Larceny",
+                       offense_category_name %in% c("Motor Vehicle Theft"
+                                                    ) ~ "Motor_Vehicle_Theft",
+                       offense_category_name %in% c("Prostitution Offenses",
+                                                    "Sex Offenses",
+                                                    "Sex Offenses, Non-forcible",
+                                                    "Pornography/Obscene Material"
+                                                    ) ~ "Sex_Crime",
+                       offense_category_name %in% c("Robbery"
+                                                    ) ~ "Robbery",
+                       TRUE ~ "umm what"))
+}
+
+rm(ref_race)
+rm(ages, races, sexes)
+rm(df, state_data, yearly_data, temp)
+rm(year, state)
+rm(nibrs_offender, nibrs_offense, nibrs_offense_type)
+rm(f, file, files, floc, loc)
+```
+
+```{r state-crime-data-2}
+# recategorize offenses
+sc_long <- sc %>% 
+  group_by(data_year, state, cat) %>% 
+  summarise("male" = sum(`M`),
+            "female" = sum(`F`),
+            "native_american" = sum(`American Indian or Alaska Native`),
+            "asian" = sum(Asian, `Asian, Native Hawaiian, or Other Pacific Islander`),
+            "black" = sum(`Black or African American`),
+            "white" = sum(White),
+            "0_9" = sum(`0_9`),
+            "10_19" = sum(`10_19`),
+            "20_29" = sum(`20_29`),
+            "30_39" = sum(`30_39`),
+            "40_49" = sum(`40_49`),
+            "50_59" = sum(`50_59`),
+            "60_69" = sum(`60_69`),
+            "70_79" = sum(`70_79`),
+            "80_89" = sum(`80_89`),
+            "90_older" = sum(`90_older`)
+            ) %>% 
+  ungroup() %>% 
+  mutate(total_offenses = select(., `male`:`90_older`) %>% rowSums(na.rm=T)) %>% 
+  merge(pop, by=c("data_year", "state"))
+
+sc_long[,4:20] <- sc_long[,4:20] / sc_long[,21] * 1000
+sc_long <- mutate(sc_long, total_offenses = total_offenses/3)
+
+sc_wide <- sc_long %>%
+  spread(cat, total_offenses) %>% 
+  mutate_if(is.numeric, funs(ifelse(is.na(.), 0, .))) %>% 
+  #select(data_year, state, Aggravated_Assault:Trafficking) %>% 
+  group_by(data_year, state) %>% 
+  summarise_all(list(sum))
+    
+```
+
+
+### Effect of Police Employment on Crime Rates
+
+```{r dfs-for-pe-effect}
+# Create linear models
+
+pe_crime_df <- merge(sc_long,
+                      pe_recent,
+                      by=c("data_year", "state")) %>% 
+  mutate_if(is.numeric, funs(ifelse(is.na(.), 0, .))) %>% 
+  group_by(data_year, state) %>% 
+  summarise(offense_rate = sum(total_offenses),
+            officer_rate = mean(officer_rate_per_1000),
+            civilian_rate = mean(civilian_rate_per_1000),
+            total_rate = mean(total_rate_per_1000)
+            ) %>% 
+  ungroup()
+  
+pe_crime_df <- pe_crime_df %>% 
+  group_by(state) %>% 
+  slice(which.min(offense_rate)) %>% 
+  mutate(is_min = "min") %>% 
+  merge(pe_crime_df, all=T) %>% 
+  mutate_all(funs(ifelse(is.na(.), "not_min", .)))
+
+pe_crime_df <- pe_crime_df %>% 
+  group_by(state) %>% 
+  slice(which.max(offense_rate)) %>% 
+  mutate(is_max = "max") %>% 
+  merge(pe_crime_df, all=T) %>% 
+  mutate_all(funs(ifelse(is.na(.), "not_max", .)))
+
+pe_crime_df <- pe_crime_df %>% 
+  mutate(type_point = 
+           case_when(is_min=="min" ~ "min",
+                     is_max=="max" ~ "max",
+                     TRUE ~ "other"))
+```
+
+We merged the dataframes containing state level police employment data and state level crime data to produce the following figures. Each observation represents a single state in a single year. Both employment rates and crime rates are normalized by the population of a state in a certain year based on Census data. Rather than looking at specific counts of a demographic group committing a certain crime (i.e. males committing arson in 2010 Arkansas) and drastically increasing our number of output variables, we simply look at aggregated, normalized crime rate in a state for a certain year.
+
+#### *Officer Employment Effect*
+
+```{r officer-rate-effect}
+summary(lm(offense_rate~officer_rate,
+           data=pe_crime_df))
+
+ggplot(data=pe_crime_df,
+       mapping=aes(x=officer_rate, y=offense_rate))+
+  geom_smooth(se=F,
+              method="lm",
+              formula=y~x,
+              mapping=aes(color=type_point),
+              linetype="longdash",
+              data=filter(pe_crime_df, type_point!="other"))+
+  geom_smooth(se=F,
+              method="lm",
+              formula=y~x,
+              color="black")+
+  theme_minimal()+
+  geom_point(data=filter(pe_crime_df, type_point=="other"))+
+  geom_point(aes(color=type_point, shape=type_point),
+             data=filter(pe_crime_df, type_point!="other"))+
+  scale_color_manual(values=c("red", "green", "black"))+
+  scale_shape_manual(values=c("square", "triangle", "circle"))+
+  xlab("Officers per 1000")+
+  ylab("Offenses per 1000")+
+  labs(color="Type", shape="Type")
+```
+
+The linear model shows a statistically significant effect and negative correlation between officer rate and offense rate, supporting the claim that more officers leads to less crime. However, our plot shows a cluster of points with high officer rates and low crime rates. This cluster is easily identifiable as the District of Columbia, notorious for its high rate of police employment. Also in this cluster is the outlier of 2011 Oregon; employment spiked as a reaction to the Occupy Portland movement late in the year. If we remove these points from the dataset, we obtain the following:
+
+```{r officer-rate-effect-no-dc}
+pe_crime_df_no_dc <- pe_crime_df %>% 
+  filter(state != "DC") %>% 
+  filter(state != "OR" | data_year != 2011)
+
+summary(lm(offense_rate~officer_rate,
+           data=pe_crime_df_no_dc))
+
+ggplot(data=pe_crime_df_no_dc,
+       mapping=aes(x=officer_rate, y=offense_rate))+
+  geom_smooth(se=F,
+              method="lm",
+              formula=y~x,
+              mapping=aes(color=type_point),
+              linetype="longdash",
+              data=filter(pe_crime_df_no_dc, type_point!="other"))+
+  geom_smooth(se=F,
+              method="lm",
+              formula=y~x,
+              color="black")+
+  theme_minimal()+
+  geom_point(data=filter(pe_crime_df_no_dc, type_point=="other"))+
+  geom_point(aes(color=type_point, shape=type_point),
+             data=filter(pe_crime_df_no_dc, type_point!="other"))+
+  scale_color_manual(values=c("red", "green", "black"))+
+  scale_shape_manual(values=c("square", "triangle", "circle"))+
+  xlab("Officers per 1000")+
+  ylab("Offenses per 1000")+
+  labs(color="Type", shape="Type")
+```
+
+We now see the exact opposite effect from before: officer rate does not have a statistically significant effect on crime rates, but it does seem to be positively correlated. This actually opposes the idea that more officers leads to lower crime. Also, officer rates in isolation are not great predictors of crime rate, as we clearly see several states with similar officer rates have drastically different crime rates.
+
+Note that we also highlighted points that represent years of maximum and minimum crime rates in all the states. In both the case with the District of Columbia and without, we see that the model line is steeper downward with max points as opposed to min points (i.e. the slope is more negative with max points). This leads to a very interesting relationship: in the face of heightened crime, officers have a better ability to reduce crime, while their correlative effect weakens at low crime points.
+
+#### *Civilian Employment Effect*
+
+```{r civilian-rate-effect}
+summary(lm(offense_rate~civilian_rate,
+           data=pe_crime_df))
+
+ggplot(data=pe_crime_df,
+             mapping=aes(x=civilian_rate, y=offense_rate))+
+  geom_smooth(se=F,
+              method="lm",
+              formula=y~x,
+              mapping=aes(color=type_point),
+              linetype="longdash",
+              data=filter(pe_crime_df, type_point!="other"))+
+  geom_smooth(se=F,
+              method="lm",
+              formula=y~x,
+              color="black")+
+  theme_minimal()+
+  geom_point(data=filter(pe_crime_df, type_point=="other"))+
+  geom_point(aes(color=type_point, shape=type_point),
+             data=filter(pe_crime_df, type_point!="other"))+
+  scale_color_manual(values=c("red", "green", "black"))+
+  scale_shape_manual(values=c("square", "triangle", "circle"))+
+  xlab("Civilians per 1000")+
+  ylab("Offenses per 1000")+
+  labs(color="Type", shape="Type")
+```
+
+Unlike with officer rate, no cluster of points exist in our plot. And even without the cluster, we see a statistically significant effect of civilian rate increasing crime rate. This refutes our first hypothesis, as increased employment of civilians seems to have the effect of increasing crime and a stronger effect than that of officer rate.
+
+Also of note is that the model for max points now has a higher slope than the model for min points. This implies that civilians in policing institutions do a *worse* job when crime peaks.
+
+#### *Total Employment Effect*
+
+```{r total-rate-effect}
+summary(lm(offense_rate~total_rate,
+           data=pe_crime_df))
+summary(lm(offense_rate~total_rate,
+           data=pe_crime_df_no_dc))
+
+p1 <- ggplot(data=pe_crime_df,
+       mapping=aes(x=total_rate, y=offense_rate))+
+  geom_smooth(se=F,
+              method="lm",
+              formula=y~x,
+              mapping=aes(color=type_point),
+              linetype="longdash",
+              data=filter(pe_crime_df, type_point!="other"))+
+  geom_smooth(se=F,
+              method="lm",
+              formula=y~x,
+              color="black")+
+  theme_minimal()+
+  geom_point(data=filter(pe_crime_df, type_point=="other"))+
+  geom_point(aes(color=type_point, shape=type_point),
+             data=filter(pe_crime_df, type_point!="other"))+
+  scale_color_manual(values=c("red", "green", "black"))+
+  scale_shape_manual(values=c("square", "triangle", "circle"))+
+  xlab("Total Employment per 1000")+
+  ylab("Offenses per 1000")+
+  labs(color="Type", shape="Type")
+
+p2 <- ggplot(data=pe_crime_df_no_dc,
+       mapping=aes(x=total_rate, y=offense_rate))+
+  geom_smooth(se=F,
+              method="lm",
+              formula=y~x,
+              mapping=aes(color=type_point),
+              linetype="longdash",
+              data=filter(pe_crime_df_no_dc, type_point!="other"))+
+  geom_smooth(se=F,
+              method="lm",
+              formula=y~x,
+              color="black")+
+  theme_minimal()+
+  geom_point(data=filter(pe_crime_df_no_dc, type_point=="other"))+
+  geom_point(aes(color=type_point, shape=type_point),
+             data=filter(pe_crime_df_no_dc, type_point!="other"))+
+  scale_color_manual(values=c("red", "green", "black"))+
+  scale_shape_manual(values=c("square", "triangle", "circle"))+
+  xlab("Total Employment per 1000")+
+  ylab("Offenses per 1000")+
+  labs(color="Type", shape="Type")
+
+ggarrange(p1, p2,
+          labels=c("With DC", "Without DC"),
+          ncol=2,
+          common.legend=T)
+
+rm(p1, p2)
+```
+
+In regards to total employment, there is the same DC cluster that was present with the officer rates. Removing this cluster yields much of the same analysis: total employment rate is negatively correlated with offense rate, but shifts to positively correlated when removing the DC cluster. One key difference is that this model is actually statistically significant where the officer rate model was not. Thus, we can conclude that total employment is a solid predictor of crime rates in the US. 
+
+Also, the slopes of the min and max models are nearly even in both the DC and non-DC cases. This suggests that total law enforcement is equally as effective at both low and high points of crime.
+
+### Effect of Crime Rates on Future Police Employment
+
+```{r dfs-for-crime-effect}
+# Creating Linear Models
+
+full_df <- merge(sc_wide,
+                 (mutate(pe_recent, last_year = data_year-1)),
+                 by.x=c("data_year", "state"),
+                 by.y=c("last_year", "state")) %>% 
+  mutate_if(is.numeric, funs(ifelse(is.na(.), 0, .)))
+```
+
+As stated before, we make the assumption that changes in police employment take approximately one year before reacting to demographic shifts in crime rate. Similar to our previous analysis, we will merge the state-level police employment and crime data, but based on the next year of police employment. This results in 10% fewer observations as we only utilize crime rates from 2010-2018 and employment rates from 2011-2019. 
+
+For each of the perspectives we look at (race, sex, age, and offense) we plot the normalized frequencies of each perspective against the police employment rate (either officer, civilian, or total) the following year. This allows us to view the correlation between each demographic group in isolation. We also create linear models for each of the employment rates using all the factors of a certain perspective, viewing their correlative effects in conjunction.
+
+#### *Race Perspective*
+
+```{r race-crime-effect, fig.height=8}
+# Race based model
+race_df <- full_df %>% 
+  gather(key="race", value="ct", `native_american`:`white`)
+
+p1 <- ggplot(aes(x=ct, y=officer_rate_per_1000),
+       data=race_df
+       )+
+  geom_point(aes(color=race), size=1)+
+  geom_smooth(se=F,
+              method="lm",
+              formula=y~x,
+              mapping=aes(color=race),
+              #linetype="longdash",
+              size=1.5
+              )+
+  theme_minimal()+
+  xlab("Offense Rate")+
+  ylab("Officer Rate")+
+  ggtitle("Officer")
+
+p2 <- ggplot(aes(x=ct, y=civilian_rate_per_1000),
+       data=race_df
+       )+
+  geom_point(aes(color=race), size=1)+
+  geom_smooth(se=F,
+              method="lm",
+              formula=y~x,
+              mapping=aes(color=race),
+              size=1.5
+              )+
+  theme_minimal()+
+  xlab("Offense Rate")+
+  ylab("Civilian Rate")+
+  ggtitle("Civilian")
+
+p3 <- ggplot(aes(x=ct, y=total_rate_per_1000),
+       data=race_df
+       )+
+  geom_point(aes(color=race), size=1)+
+  geom_smooth(se=F,
+              method="lm",
+              formula=y~x,
+              mapping=aes(color=race),
+              size=1.5
+              )+
+  theme_minimal()+
+  xlab("Offense Rate")+
+  ylab("Total Employment Rate")+
+  ggtitle("Total")
+
+ggarrange(p1, p2, p3,
+          ncol=2, nrow=2,
+          common.legend=T)
+
+  # black and white crime are significant; oddly black crime is positively correlated while white crime is negatively correlated
+summary(lm(officer_rate_per_1000~native_american+asian+black+white,
+           data=full_df))
+  # white crime is insignificant to civilian rate
+summary(lm(civilian_rate_per_1000~native_american+asian+black+white,
+           data=full_df))
+
+summary(lm(total_rate_per_1000~native_american+asian+black+white,
+           data=full_df))
+
+rm(race_df, p1, p2, p3)
+```
+
+Using the four races recorded in the NIBRS format as factors in a linear model, we find varying results for each type of police employment. Only black and white crime are significant to officer rates, but black crime has a positive correlation while that of white crime is negative. For civilian rates, all the minority races are significant while white crime is not; this implies that people volunteer and join law enforcement mainly in response to minority crime. Lastly, all four races are significant predictors of total employment, but Native American and black crime are positively correlated white Asian and white crime are negatively correlated; one could interpret this as crime by the latter two races being deemed less threatening.
+
+The scatterplots shown also give an idea as to the relationship of crime rates by different races in isolation with future employment rates. As Native American, Asian, and white crime increase, officer rates seem to decrease, while officer rate seems to increase with black crime. On the other hand, all the minority races have positive correlations with increasing civilian rates while white crime has negative (and almost) zero correlation; this reinforces the idea that white crime is perceived to be less threatening to civilians while minority crime (especially by Native Americans) leads to increases in employment.
+
+Also of note is the cluster at the top left of the Officer and Total figures. Like before, this is easily identifiable as the DC cluster; however, removing this cluster does not make any significant changes to the model, so, for viewing convenience, it will not be shown.
+
+#### *Sex Perspective*
+
+```{r gender-crime-effect, fig.height=8}
+# Sex based model
+sex_df <- full_df %>% 
+  gather(key="sex", value="ct", `male`:`female`)
+
+p1 <- ggplot(aes(x=ct, y=officer_rate_per_1000),
+       data=sex_df
+       )+
+  geom_point(aes(color=sex), size=1)+
+  geom_smooth(se=F,
+              method="lm",
+              formula=y~x,
+              mapping=aes(color=sex),
+              #linetype="longdash",
+              size=1.5
+              )+
+  theme_minimal()+
+  xlab("Offense Rate")+
+  ylab("Officer Rate")+
+  ggtitle("Officer")
+
+p2 <- ggplot(aes(x=ct, y=civilian_rate_per_1000),
+       data=sex_df
+       )+
+  geom_point(aes(color=sex), size=1)+
+  geom_smooth(se=F,
+              method="lm",
+              formula=y~x,
+              mapping=aes(color=sex),
+              size=1.5
+              )+
+  theme_minimal()+
+  xlab("Offense Rate")+
+  ylab("Civilian Rate")+
+  ggtitle("Civilian")
+
+p3 <- ggplot(aes(x=ct, y=total_rate_per_1000),
+       data=sex_df
+       )+
+  geom_point(aes(color=sex), size=1)+
+  geom_smooth(se=F,
+              method="lm",
+              formula=y~x,
+              mapping=aes(color=sex),
+              size=1.5
+              )+
+  theme_minimal()+
+  xlab("Offense Rate")+
+  ylab("Total Employment Rate")+
+  ggtitle("Total")
+
+ggarrange(p1, p2, p3,
+          ncol=2, nrow=2,
+          common.legend=T)
+
+
+  # male crime is significant predictor, female is not
+summary(lm(officer_rate_per_1000~male+female,
+           data=full_df))
+summary(lm(civilian_rate_per_1000~male+female,
+           data=full_df))
+summary(lm(total_rate_per_1000~male+female,
+           data=full_df))
+
+rm(sex_df, p1, p2, p3)
+```
+
+The scatterplots show that the models for female crime are steeper in every case of employment type; this indicates that female crime is more polarizing and has a stronger correlative ability with employment rates. This is backed by the results from the linear models, showing that female crime is more significant than male crime in each case. Interestingly, female crime has a negative correlation with officer rate, but a positive correlation with civilian rate, while male crime has the exact opposite correlations. This implies that officers and civilians perceive crimes differently based on sex: members of the academy react strongly to male crime while society and volunteers react to female crime.
+
+#### *Age Perspective*
+
+```{r age-crime-effect, fig.height=8}
+# Age based model
+age_df <- full_df %>% 
+  gather(key="age", value="ct", `0_9`:`90_older`)
+
+p1 <- ggplot(aes(x=ct, y=officer_rate_per_1000),
+       data=age_df
+       )+
+  geom_point(aes(color=age), size=1)+
+  geom_smooth(se=F,
+              method="lm",
+              formula=y~x,
+              mapping=aes(color=age),
+              size=1.5
+              )+
+  theme_minimal()+
+  xlab("Offense Rate")+
+  ylab("Employment Rate")+
+  ggtitle("Officer")
+
+p2 <- ggplot(aes(x=ct, y=civilian_rate_per_1000),
+       data=age_df
+       )+
+  geom_point(aes(color=age), size=1)+
+  geom_smooth(se=F,
+              method="lm",
+              formula=y~x,
+              mapping=aes(color=age),
+              size=1.5
+              )+
+  theme_minimal()+
+  xlab("Offense Rate")+
+  ylab("Employment Rate")+
+  ggtitle("Civilian")
+
+p3 <- ggplot(aes(x=ct, y=total_rate_per_1000),
+       data=age_df
+       )+
+  geom_point(aes(color=age), size=1)+
+  geom_smooth(se=F,
+              method="lm",
+              formula=y~x,
+              mapping=aes(color=age),
+              size=1.5
+              )+
+  theme_minimal()+
+  xlab("Offense Rate")+
+  ylab("Employment Rate")+
+  ggtitle("Total")
+
+ggarrange(p1, p2, p3,
+          ncol=2, nrow=2,
+          common.legend=T)
+
+summary(lm(officer_rate_per_1000~`0_9`+`10_19`+`20_29`+`30_39`+`40_49`+`50_59`+`60_69`+`70_79`+`80_89`+`90_older`,
+           data=full_df))
+summary(lm(civilian_rate_per_1000~`0_9`+`10_19`+`20_29`+`30_39`+`40_49`+`50_59`+`60_69`+`70_79`+`80_89`+`90_older`,
+           data=full_df))
+summary(lm(total_rate_per_1000~`0_9`+`10_19`+`20_29`+`30_39`+`40_49`+`50_59`+`60_69`+`70_79`+`80_89`+`90_older`,
+           data=full_df))
+
+rm(age_df, p1, p2, p3)
+```
+
+Of our demographic perspectives, age proves to be the least interesting, perhaps due to having the most factors. The linear model shows that only two age groups have significant correlation with some police employment rate. Offenders aged between 30 and 39 have a positive correlation for civilian rate, while offenders aged 90 or older have a strong negative correlation. For the former, a possible explanation is that much of civilian law enforcement falls within this age group, and more people volunteer as a result of someone they know personally committing a crime. On the other hand, people with a personal relationship with an offender 90 or older would evidently stray away from participating in the civilian force. Moreover, the elderly are usually considered as less threatening, which backs the results of the model.
+
+#### *Offense Perspective*
+
+```{r offense-effect, fig.height=8}
+# Crime based model
+off_df <- full_df %>% 
+  gather(key="off", value="ct", `Aggravated_Assault`:`Trafficking`)
+
+p1 <- ggplot(aes(x=ct, y=officer_rate_per_1000),
+       data=off_df
+       )+
+  geom_point(aes(color=off), size=1)+
+  geom_smooth(se=F,
+              method="lm",
+              formula=y~x,
+              mapping=aes(color=off),
+              #linetype="longdash",
+              size=1.5
+              )+
+  theme_minimal()+
+  xlab("Offense Rate")+
+  ylab("Officer Rate")+
+  labs(color="offense")+
+  ggtitle("Officer")
+
+p2 <- ggplot(aes(x=ct, y=civilian_rate_per_1000),
+       data=off_df
+       )+
+  geom_point(aes(color=off), size=1)+
+  geom_smooth(se=F,
+              method="lm",
+              formula=y~x,
+              mapping=aes(color=off),
+              size=1.5
+              )+
+  theme_minimal()+
+  xlab("Offense Rate")+
+  ylab("Civilian Rate")+
+  labs(color="offense")+
+  ggtitle("Civilian")
+
+p3 <- ggplot(aes(x=ct, y=total_rate_per_1000),
+       data=off_df
+       )+
+  geom_point(aes(color=off), size=1)+
+  geom_smooth(se=F,
+              method="lm",
+              formula=y~x,
+              mapping=aes(color=off),
+              size=1.5
+              )+
+  theme_minimal()+
+  xlab("Offense Rate")+
+  ylab("Total Employment Rate")+
+  labs(color="offense")+
+  ggtitle("Total")
+
+ggarrange(p1, p2, p3,
+          ncol=2, nrow=2,
+          common.legend=T)
+
+
+summary(lm(officer_rate_per_1000~
+             Other + Arson + Aggravated_Assault + Financial_Crime + Burglary +
+             Property_Crime + `Narcotics/Alcohol` + Homicide + Trafficking +
+             Larceny + Motor_Vehicle_Theft + Sex_Crime + Robbery
+             ,
+           data=full_df))
+
+summary(lm(civilian_rate_per_1000~
+             Other + Arson + Aggravated_Assault + Financial_Crime + Burglary +
+             Property_Crime + `Narcotics/Alcohol` + Homicide + Trafficking +
+             Larceny + Motor_Vehicle_Theft + Sex_Crime + Robbery
+             ,
+           data=full_df))
+
+summary(lm(total_rate_per_1000~
+             Other + Arson + Aggravated_Assault + Financial_Crime + Burglary +
+             Property_Crime + `Narcotics/Alcohol` + Homicide + Trafficking +
+             Larceny + Motor_Vehicle_Theft + Sex_Crime + Robbery
+             ,
+           data=full_df))
+
+rm(off_df, p1, p2, p3)
+```
+
+The first three plots are designed to show the correlation between different crimes being committed in isolation and the three rates of police employment. We see that the only offense to have a positive correlation in each plot is robbery, implying that it has a strong effect on policing institutions deciding to increase employment. Oddly enough, the offense rates of all the other offenses for officer and total employment rates have a negative correlation, suggesting that less police is hired in the presence of heightened crime. The opposite correlation exists for civilian hiring rates, allowing us to conclude that civilians reacts to increased crime with more efforts to thwart it.
+
+For the linear model we created to predict officer rate, we find that several crimes are significant, but only three (Aggravated Assault, Narcotics/Alcohol, and Robbery) are also positively correlated. For civilian rate, the positive significant factors are Financial Crime, Narcotics/Alcohol, and Robbery. Lastly, for total rate we see that all four of the listed crimes are significant and positively correlated. 
+
+---
+
+# Conclusion
+
+#### *Discussion*
+
+Our results both support and deviate from our original hypotheses. In terms of the effect of crime rate on future police employment, 
+we find that the most significant groups are either middle-aged, female, or minority offenders. Surprisingly, young offenders don't seem to have any significant correlation with police employment when modeled with offenders from other age groups. Also, while male crime was significant, it was much less so than female crime. In addition, our model from a race perspective evidently supports our hypothesis that minority offenders have the most significant effect on increasing future police employment. With these results, it seems that policing institutions disproportionately react towards crimes committed by the most marginalized groups in our society (women and minorities). This trend is alarming for opponents of traditional law enforcement, as our model suggests that policing will increase as the minority population grows. Figure 5 in the appendix also shows that police employment rates have been slightly decreasing over the 2010s; in conjunction with our model, we can conclude that police have flowed into areas with higher rates of female and minority crime, but even more police have flowed out of areas with higher rates of male or white crime.
+
+In regards to the effectiveness of police employment, our models actually contradict our original hypothesis. Civilian employment shows a significant positive correlation with offense rate, implying that it is *not* a particularly effective solution to managing crime. With our whole dataset, officer rate and total employment rate were both negatively correlated with offense rate, but this was in large part due to the low crime rates and high employment rates of the District of Columbia; removing those points resulted in both rates becoming positively correlated with offense rate, implying that the majority of states' policing institutions are not effective in reducing crime. This leads one to wonder why employment and crime rates are exceptionally high and low, respectively, in the District of Columbia (a topic of potential future research).
+
+The main one should takeaway from this study is that US policing institutions are imperfect. Whether they are publicly addressed or not, inherent biases exist within law enforcement as employment changes disproportionately with the demographics of offenders. Moreover, law enforcement is not as effective as believed by the vast majority of Americans. All this is to say that alternative methods to peacekeeping should be considered and tested. As Patrick Sharkey suggests, we should commit to a community based approach for the next 10 years, even through the inevitable controversies, triumphs, and debate. As evidenced in this study, we've already seen the successes and pitfalls of traditional policing this past decade. Perhaps it's time to experiment with some alternatives for the new one.
+
+#### *Limitations*
+
+The single biggest limitation to this study is the size of our data set and the computational resources at hand. With every incident ever recorded in the past decade, we have enormous potential for police employment and crime rate analysis. However, we've chosen to look at yearly rates, rather than a more granular monthly or weekly approach. This decreases the number of data points we have to feed into our model, limiting our total number of variables. And in turn, this forces us to look at several different perspectives in a vacuum rather than combining demographic features (i.e. we can look at the effect of black or white crime and the effect of male or female crime, but not the exact effect of white and male crime versus black and female crime).
+
+#### *Future Work*
+
+Several parts of the structure of this study were designed with future expansion in mind. Some obvious next steps are to include the 16 states not included in the study as they transition over to the NIBRS data format. We can also take a more granular approach to our time steps; rather than looking at counts for each year, we can look by month for more data points and a potentially more accurate model. In such a scenario, we could play around with the lag period of employment change reaction, increasing or decreasing from our assumption of 1 year. Perhaps the most ambitious future project would be creating a Hidden Markov Model from our data, monitoring states and probabilities as more data is introduced into our dataset and being able to predict both employment and crime rates into the future. Such a model would be beneficial in informing states of where to concentrate police effectively. 
+
+---
+
+# Bibliography
+
+Braga, Anthony A., et al. “The Effects of Hot Spots Policing on Crime: An Updated Systematic Review and Meta-Analysis.” *Justice Quarterly*, vol. 31, no. 4, 2012, pp. 633–663., doi:10.1080/07418825.2012.673632. 
+
+Karma, Roge. “How Cities Can Tackle Violent Crime without Relying on Police.” *Vox*, Vox, 7 Aug. 2020, www.vox.com/21351442/patrick-sharkey-uneasy-peace-abolish-defund-the-police-violence-cities. 
+
+Phelan, John. “Research Shows That More Cops Mean Less Crime.” *Center of the American Experiment*, 14 Sept. 2020, www.americanexperiment.org/research-shows-that-more-cops-mean-less-crime/. 
+
+Saad, Lydia. “Black Americans Want Police to Retain Local Presence.” *Gallup.com*, Gallup, 5 Aug. 2020, news.gallup.com/poll/316571/black-americans-police-retain-local-presence.aspx. 
+
+Sharkey, Patrick. “Perspective | Cops Prevent Violence. But They Aren't the Only Ones Who Can Do It.” *The Washington Post*, WP Company, 12 June 2020, www.washingtonpost.com/outlook/2020/06/12/defund-police-violent-crime/. 
+
+Sherman, Lawrence W. *Evidence-Based Crime Prevention.* Routledge, 2006. 
+
+Watkins, Matt, and Matt Watkins. “Keeping the Peace: Patrick Sharkey on Sustaining the Great Crime Decline.” *Center for Court Innovation*, 1 June 2018, www.courtinnovation.org/publications/patrick-sharkey-podcast. 
+
+---
+
+# Appendix
+
+This section contains several additional figures, many of which were used in exploratory data analysis or referenced above. Commentary and interpretations are provided for select figures.
+
+### Police Employment
+
+```{r map-average-officer-pe}
+
+# for officers
+state_summary <- pe_recent %>% 
+  group_by(state) %>% 
+  summarise(rate=mean(officer_rate_per_1000))
+
+plot_usmap(data=state_summary,
+           values="rate",
+           color="black")+
+  scale_fill_continuous(low="white", high="steelblue4",
+                        name="Officers per 1000")+
+  theme(legend.position="right")
+
+rm(state_summary)
+```
+
+**Fig. 1:** Average officer employment per 1000 citizens across US (2010-2019). Darker tones indicate higher rates of employment.
+
+```{r map-officer-pe-over-time}
+# Maps of Police Employment for each year
+pe10 <- plot_usmap(data=filter(pe_recent, data_year==2010),
+                   values="officer_rate_per_1000",
+                   color="black")+
+  scale_fill_continuous(low="white", high="steelblue4",
+                        name="Officers per 1000")+
+  theme(legend.position="none")
+
+pe11 <- plot_usmap(data=filter(pe_recent, data_year==2011),
+                   values="officer_rate_per_1000",
+                   color="black")+
+  scale_fill_continuous(low="white", high="steelblue4",
+                        name="Officers per 1000")+
+  theme(legend.position="none")
+
+pe12 <- plot_usmap(data=filter(pe_recent, data_year==2012),
+                   values="officer_rate_per_1000",
+                   color="black")+
+  scale_fill_continuous(low="white", high="steelblue4",
+                        name="Officers per 1000")+
+  theme(legend.position="none")
+
+pe13 <- plot_usmap(data=filter(pe_recent, data_year==2013),
+                   values="officer_rate_per_1000",
+                   color="black")+
+  scale_fill_continuous(low="white", high="steelblue4",
+                        name="Officers per 1000")+
+  theme(legend.position="none")
+
+pe14 <- plot_usmap(data=filter(pe_recent, data_year==2014),
+                   values="officer_rate_per_1000",
+                   color="black")+
+  scale_fill_continuous(low="white", high="steelblue4",
+                        name="Officers per 1000")+
+  theme(legend.position="none")
+
+pe15 <- plot_usmap(data=filter(pe_recent, data_year==2015),
+                   values="officer_rate_per_1000",
+                   color="black")+
+  scale_fill_continuous(low="white", high="steelblue4",
+                        name="Officers per 1000")+
+  theme(legend.position="none")
+
+pe16 <- plot_usmap(data=filter(pe_recent, data_year==2016),
+                   values="officer_rate_per_1000",
+                   color="black")+
+  scale_fill_continuous(low="white", high="steelblue4",
+                        name="Officers per 1000")+
+  theme(legend.position="none")
+
+pe17 <- plot_usmap(data=filter(pe_recent, data_year==2017),
+                   values="officer_rate_per_1000",
+                   color="black")+
+  scale_fill_continuous(low="white", high="steelblue4",
+                        name="Officers per 1000")+
+  theme(legend.position="none")
+
+pe18 <- plot_usmap(data=filter(pe_recent, data_year==2018),
+                   values="officer_rate_per_1000",
+                   color="black")+
+  scale_fill_continuous(low="white", high="steelblue4",
+                        name="Officers per 1000")+
+  theme(legend.position="none")
+
+pe19 <- plot_usmap(data=filter(pe_recent, data_year==2019),
+                   values="officer_rate_per_1000",
+                   color="black")+
+  scale_fill_continuous(low="white", high="steelblue4",
+                        name="Officers per 1000")+
+  theme(legend.position="none")
+
+ggarrange(pe10, pe11, pe12, pe13, pe14, pe15, pe16, pe17, pe18, pe19,
+          labels=c(2010:2019),
+          ncol=5, nrow=2,
+          common.legend=T,
+          font.label = list(size = 16))
+
+rm(pe10)
+rm(pe11)
+rm(pe12)
+rm(pe13)
+rm(pe14)
+rm(pe15)
+rm(pe16)
+rm(pe17)
+rm(pe18)
+rm(pe19)
+```
+
+**Fig. 2:** Officer employment over time. 
+
+```{r map-average-civilian-pe}
+# for civilians
+state_summary <- pe_recent %>% 
+  group_by(state) %>% 
+  summarise(rate=mean(civilian_rate_per_1000))
+
+plot_usmap(data=state_summary,
+           values="rate",
+           color="black")+
+  scale_fill_continuous(low="white", high="steelblue4",
+                        name="Civilians per 1000")+
+  theme(legend.position="right")
+
+rm(state_summary)
+```
+
+**Fig. 3:** Average civilian employment per 1000 citizens across US (2010-2019).
+
+```{r map-civilian-pe-over-time}
+# Maps of Police Employment for each year
+pe10 <- plot_usmap(data=filter(pe_recent, data_year==2010),
+                   values="civilian_rate_per_1000",
+                   color="black")+
+  scale_fill_continuous(low="white", high="steelblue4",
+                        name="Civilians per 1000")+
+  theme(legend.position="none")
+
+pe11 <- plot_usmap(data=filter(pe_recent, data_year==2011),
+                   values="civilian_rate_per_1000",
+                   color="black")+
+  scale_fill_continuous(low="white", high="steelblue4",
+                        name="Civilians per 1000")+
+  theme(legend.position="none")
+
+pe12 <- plot_usmap(data=filter(pe_recent, data_year==2012),
+                   values="civilian_rate_per_1000",
+                   color="black")+
+  scale_fill_continuous(low="white", high="steelblue4",
+                        name="Civilians per 1000")+
+  theme(legend.position="none")
+
+pe13 <- plot_usmap(data=filter(pe_recent, data_year==2013),
+                   values="civilian_rate_per_1000",
+                   color="black")+
+  scale_fill_continuous(low="white", high="steelblue4",
+                        name="Civilians per 1000")+
+  theme(legend.position="none")
+
+pe14 <- plot_usmap(data=filter(pe_recent, data_year==2014),
+                   values="civilian_rate_per_1000",
+                   color="black")+
+  scale_fill_continuous(low="white", high="steelblue4",
+                        name="Civilians per 1000")+
+  theme(legend.position="none")
+
+pe15 <- plot_usmap(data=filter(pe_recent, data_year==2015),
+                   values="civilian_rate_per_1000",
+                   color="black")+
+  scale_fill_continuous(low="white", high="steelblue4",
+                        name="Civilians per 1000")+
+  theme(legend.position="none")
+
+pe16 <- plot_usmap(data=filter(pe_recent, data_year==2016),
+                   values="civilian_rate_per_1000",
+                   color="black")+
+  scale_fill_continuous(low="white", high="steelblue4",
+                        name="Civilians per 1000")+
+  theme(legend.position="none")
+
+pe17 <- plot_usmap(data=filter(pe_recent, data_year==2017),
+                   values="civilian_rate_per_1000",
+                   color="black")+
+  scale_fill_continuous(low="white", high="steelblue4",
+                        name="Civilians per 1000")+
+  theme(legend.position="none")
+
+pe18 <- plot_usmap(data=filter(pe_recent, data_year==2018),
+                   values="civilian_rate_per_1000",
+                   color="black")+
+  scale_fill_continuous(low="white", high="steelblue4",
+                        name="Civilians per 1000")+
+  theme(legend.position="none")
+
+pe19 <- plot_usmap(data=filter(pe_recent, data_year==2019),
+                   values="civilian_rate_per_1000",
+                   color="black")+
+  scale_fill_continuous(low="white", high="steelblue4",
+                        name="Civilians per 1000")+
+  theme(legend.position="none")
+
+ggarrange(pe10, pe11, pe12, pe13, pe14, pe15, pe16, pe17, pe18, pe19,
+          labels=c(2010:2019),
+          ncol=5, nrow=2,
+          common.legend=T,
+          font.label = list(size = 16))
+
+rm(pe10)
+rm(pe11)
+rm(pe12)
+rm(pe13)
+rm(pe14)
+rm(pe15)
+rm(pe16)
+rm(pe17)
+rm(pe18)
+rm(pe19)
+```
+
+**Fig. 4:** Civilian employment over time. 
+
+```{r pe-average-over-time}
+#make lines thicker
+
+pe_cats <- pe %>% select(data_year, officer_ct_per_1000, civilian_ct_per_1000, pe_ct_per_1000) %>% 
+  gather(cat, prop, -data_year)
+
+ggplot(data=pe_cats, aes(x=data_year, y=prop, group=cat))+
+  geom_line(aes(color=cat))+
+  geom_point()+
+  scale_x_continuous(name="Year", breaks=c(2010:2019), labels=c(2010:2019))+
+  scale_y_continuous(name="Count per 1000")+
+  scale_color_manual(name="Type", labels=c("Civilian", "Officer", "Total"), values=c("green", "blue", "red"))
+
+rm(pe_cats)
+```
+
+**Fig. 5:** Police employment per 1000 citizens on national scale.
+
+```{r prop-civilians}
+civ_props <- pe %>% select(data_year, civilian_ct, total_pe_ct) %>% 
+  mutate(civ_prop = civilian_ct/total_pe_ct)
+
+ggplot(data=civ_props, aes(x=data_year, y=civ_prop, fill=data_year))+
+  geom_bar(stat="identity")+
+  scale_x_continuous(name="Year", breaks=c(2010:2019), labels=c(2010:2019))+
+  scale_y_continuous(name="Proportion")+
+  theme(legend.position="none")
+
+rm(civ_props)
+```
+
+**Fig. 6:** National proportion of civilians in law enforcement
+
+```{r prop-females}
+female_props <- pe %>% select(data_year, female_officer_prop:female_total_prop) %>% 
+  gather(cat, prop, -data_year)
+
+ggplot(data=female_props, aes(x=data_year, y=prop, group=cat))+
+  geom_line(aes(color=cat))+
+  geom_point()+
+  scale_x_continuous(name="Year", breaks=c(2010:2019), labels=c(2010:2019))+
+  scale_y_continuous(name="Proportion of Females")+
+  scale_color_manual(name="Type", labels=c("Civilian", "Officer", "Total"), values=c("green", "blue", "red"))
+
+
+rm(female_props)
+```
+
+**Fig. 7:** National proportion of females in law enforcement
+
+```{r average-turnover}
+ggplot(data=pe_states_spread, aes(y=reorder(state, total_to), x=total_to, fill=reorder(state, total_to)))+
+  geom_bar(stat="identity")+
+  xlab("Rate of Turnover")+
+  ylab("State")+
+  theme(legend.position="none")
+```
+
+**Fig. 8:** Normalized average turnover in police employment across US from 2010 to 2019.
+
+Using standard deviation and normalizing techniques, we visualize the average turnover in total police employment for each state. Values less than 1 indicate low rates of turnover.
+
+### Crime Rates
+
+```{r most-common-crimes}
+off_summary <- offenses_df %>% 
+  group_by(offense) %>% 
+  summarise(tot = sum(count))
+
+ggplot(data=off_summary,
+       aes(y=reorder(offense, tot), x=tot))+
+  geom_bar(stat="identity")+
+  #geom_text(aes(label=tot), position=position_dodge(width=0.9), hjust=-0.05)+
+  geom_text(aes(label=tot), position=position_dodge(width=0.5), vjust=-0.2)+
+  xlab("Total Incidents")+
+  ylab("Offense")+
+  coord_flip()
+
+
+#temp <- reorder(off_summary$offense, off_summary$avg, order=T)
+#levels(fct_rev(temp))
+
+rm(off_summary)
+```
+
+**Fig. 9:** Most Commonly Committed Crimes (2010-2019)
+
+The 10 crimes denoted here are the only ones available for national-level query from the CDE API. Note that property-crime includes arson, larceny, robbery, and burglary offenses.
+
+```{r total-crime-over-time}
+# Total Number of Offenses by Crime
+ggplot(data=offenses_df,
+       aes(x=data_year, y=count))+
+  geom_line()+
+  geom_point()+
+  theme(legend.position="right")+
+  scale_x_continuous(name="Year", breaks=c(2010,2015), labels=c(2010,2015))+
+  scale_y_continuous(name="Number of Offenses")+
+  facet_wrap(vars(offense), ncol=5, scales="free")
+```
+
+**Fig. 10:** Total Offenses Over Time (2010-2019)
+
+```{r crime-over-time-race}
+temp <- offenses_df %>% 
+  gather(key="race", value="num_offenders", "american indian or alaska native":"black or african american", "white")
+
+ggplot(data=temp,
+       aes(x=data_year, y=num_offenders, group=race))+
+  geom_line(aes(color=race))+
+  geom_point(aes(color=race))+
+  theme(legend.position="right")+
+  scale_x_continuous(name="Year", breaks=c(2010,2015), labels=c(2010,2015))+
+  scale_y_continuous(name="Number of Offenses")+
+  facet_wrap(vars(offense), ncol=5, scales="free")
+
+rm(temp)
+```
+
+**Fig. 11:** Total Offenses by Crime and Race Over Time (2010-2019)
+
+```{r crime-over-time-sex}
+temp <- offenses_df %>% 
+  gather(key="sex", value="num_offenders", "female":"male")
+
+ggplot(data=temp,
+       aes(x=data_year, y=num_offenders, group=sex))+
+  geom_line(aes(color=sex))+
+  geom_point(aes(color=sex))+
+  theme(legend.position="right")+
+  scale_x_continuous(name="Year", breaks=c(2010,2015), labels=c(2010,2015))+
+  scale_y_continuous(name="Number of Offenses")+
+  facet_wrap(vars(offense), ncol=5, scales="free")
+
+rm(temp)
+```
+
+**Fig. 12:** Total Offenses by Crime and Sex Over Time (2010-2019)
+
+```{r crime-over-time-age}
+# what do I want?
+# 1 figure (per demographic feature)
+# 10 graphs (for each crime)
+# each is line graph with 10 years as axis
+# each graph has x lines for x features
+
+temp <- offenses_df %>% 
+  gather(key="age", value="num_offenders", "0-9":"90-older")
+
+ggplot(data=temp,
+       aes(x=data_year, y=num_offenders, group=age))+
+  geom_line(aes(color=age))+
+  geom_point(aes(color=age))+
+  theme(legend.position="right")+
+  scale_x_continuous(name="Year", breaks=c(2010,2015), labels=c(2010,2015))+
+  scale_y_continuous(name="Number of Offenses")+
+  facet_wrap(vars(offense), ncol=5, scales="free")
+
+rm(temp)
+```
+
+**Fig. 13:** Total Offenses by Crime and Age Over Time (2010-2019)
